@@ -6,9 +6,9 @@ LABEL version="0.1"
 LABEL description="This container executes a job to update openldap to match the ldif's."
 LABEL last_changed="2021-12-10"
 
-ENV    RUN_DEPS="bash openldap-clients"
+ENV  RUN_DEPS="openldap-clients openldap bash"
 
-RUN apk add $RUN_DEPS 
+RUN apk add $RUN_DEPS
 
 RUN rm /var/cache/apk/* && \
     mkdir -p /var/empty/var/run/ && \

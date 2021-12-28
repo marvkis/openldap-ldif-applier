@@ -19,18 +19,26 @@ metadata:
   labels:
     app: openldap
 data:
-  OU-serviceaccoutns.ldif: |-
-    dn: ou=serviceaccoutns,{{ LDAP_BASE_DN }}
+  01-OU-serviceaccounts.ldif: |-
+    dn: ou=serviceaccounts,{{ LDAP_BASE_DN }}
     objectClass: organizationalUnit
     ou: users
 
-  USER-demo-services.ldif: |-
-    dn: uid=demo-service,ou=serviceaccoutns,{{ LDAP_BASE_DN }}
+  02-USER-demo-services.ldif: |-
+    dn: uid=demo-service,ou=serviceaccounts,{{ LDAP_BASE_DN }}
     objectClass: account
     objectClass: simpleSecurityObject
     objectClass: top
     uid: demo-service
-    userPassword: {{ LDAP_CUSTOM_DEMO_PASSWORD }}
+    userPassword: {{ LDAP_CUSTOM_DEMO_PASSWORD_ENCRYPTED }}
+
+  07-USER-demo-services-MEMBER-administrators.ldif: |-
+    # validateCmd: ! grep -q "member: uid=demo-service,ou=serviceaccounts,{{ LDAP_BASE_DN }}" ${curLDIFFile}
+    dn: cn=administrators,ou=groups,{{ LDAP_BASE_DN }}
+    changetype: modify
+    add: member
+    member: uid=demo-service,ou=serviceaccounts,{{ LDAP_BASE_DN }}
+
 
 ---
 apiVersion: v1
@@ -95,11 +103,25 @@ First of all it extracts the `dn: ` value from the file to have the dn of the ob
 
 When ldapsearch delivers a resposne, the responsing ldif is compared (via https://github.com/nxadm/ldifdiff/ ). When there are changes required the changes are applied via `ldapmodify`.
 
-As passwords cannot compared easly the password for useres are updated every time the job runs...
+As passwords cannot be compared easly the password for useres are updated every time the job runs.
+
+To allow 'modifications' on existing entries you are able to add files containing a `changetype`. These files also require an `# validateCmd: ` line. Take this example:
+
+```
+# validateCmd: ! grep -q "member: uid=demo-service,ou=serviceaccounts,{{ LDAP_BASE_DN }}" ${curLDIFFile}
+dn: cn=administrators,ou=groups,{{ LDAP_BASE_DN }}
+changetype: modify
+add: member
+member: uid=demo-service,ou=serviceaccounts,{{ LDAP_BASE_DN }}
+```
+
+When processing a file with a `changetype` it searches for the `#validateCmd: ` line. The dn will be exported and the command specified will be started. A return of `0` indicates everything is fine, `1` means the file will be applied via ldapmodify. All other codes indecate an error. With `!` the meaning of `0` and `1` is swapped.
+In this sample it executes a `grep` command to look for the required 'membership' line. When it is present, everything is fine. If not, it will be added.
+
 
 ## Configuration
 
-The Bitnami Docker OpenLDAP can be easily setup with the following environment variables:
+The OpenLDAP LDIF applier can be easily setup with the following environment variables:
 
 - `LDAP_URI`: The URI to the LDAP server. Default: ldap://openldap:389/
 - `LDAP_DOMAIN`: The "domain" of the LDAP in the format `example.org`. Used to build up `LDAP_BASE_DN` and also valid in template. **Required**
@@ -107,6 +129,7 @@ The Bitnami Docker OpenLDAP can be easily setup with the following environment v
 - `LDAP_ADMIN_USER`: admin user to connect LDAP server. Default: `cn=admin,${LDAP_BASE_DN}`
 - `LDAP_ADMIN_PASSWORD`: admin user password used to authenticate. **Required**
 - `LDAP_CUSTOM_[a-zA-Z0-9_-]*`: Additional custom variables used in template replacement.
+- `LDAP_CUSTOM_[a-zA-Z0-9_-]_PASSWORD_ENCRYPTED`: When not defined, it searches for a matching `LDAP_CUSTOM_[a-zA-Z0-9_-]_PASSWORD` variable and encrypts it with `slappasswd -s "${VALUE}"`.
 
 ## Template replacements
 
